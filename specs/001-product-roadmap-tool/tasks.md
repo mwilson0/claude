@@ -154,6 +154,8 @@ Based on plan.md, this is a Next.js 14+ App Router web application with the foll
 - [ ] T062 [US1] Implement auto-arrange logic in RoadmapCanvas.tsx to stack products in same grid cell
 - [ ] T063 [US1] Add z-index management for overlapping products using CSS flexbox stack layout
 
+**Note on FR-014 (Date Granularities)**: Deferred to post-MVP. MVP assumes all products use specific dates (YYYY-MM-DD format). Future enhancement will support month/quarter ranges (e.g., "2025-Q1") with startDate/endDate expansion.
+
 **Checkpoint**: User Story 1 complete - Users can view roadmaps with all products displayed correctly
 
 ---
@@ -283,7 +285,7 @@ Based on plan.md, this is a Next.js 14+ App Router web application with the foll
 ### API Implementation for User Story 3
 
 - [ ] T115 [P] [US3] Create POST /api/products route in app/api/products/route.ts to create new product with write-lock check
-- [ ] T116 [US3] Add validation to product creation: required fields, sampleDate <= releaseDate, unique partNumber
+- [ ] T116 [US3] Add validation to product creation: required fields, **sampleDate <= releaseDate** (FR-011 date order validation), unique partNumber
 - [ ] T117 [US3] Validate xPosition and yPosition match parent roadmap configuration
 
 ### Product Creation Form
@@ -403,7 +405,7 @@ Based on plan.md, this is a Next.js 14+ App Router web application with the foll
 - [ ] T167 [P] [US6] Create API routes for phases: GET, POST, PUT, DELETE /api/roadmaps/[id]/phases in app/api/roadmaps/[roadmapId]/phases/
 - [ ] T168 [P] [US6] Create PhaseManager component in components/roadmap/PhaseManager.tsx for adding/editing/reordering phases
 - [ ] T169 [US6] Add PhaseManager to roadmap config dialog (admin only)
-- [ ] T170 [US6] Update RoadmapCanvas to use phases when xAxisMode is "phase"
+- [ ] T170 [US6] Update RoadmapCanvas to use phases when xAxisMode is "phase" (FR-015 acceptance: phase names ≥14px font, 4.5:1 contrast ratio, clearly positioned above columns)
 
 **Checkpoint**: User Story 6 complete - Multiple roadmap management working
 
@@ -478,6 +480,7 @@ Based on plan.md, this is a Next.js 14+ App Router web application with the foll
 - [ ] T199 Implement useMemo for product position calculations in RoadmapCanvas
 - [ ] T200 Optimize re-renders: use useCallback for event handlers in drag-and-drop
 - [ ] T201 Test performance with 200 products: measure render time, drag feedback latency
+- [ ] T201A [P] Instrument drag-drop success rate metrics for SC-003 validation (optional: track snap-to-grid accuracy)
 
 ### Accessibility
 
@@ -508,6 +511,8 @@ Based on plan.md, this is a Next.js 14+ App Router web application with the foll
 - [ ] T217 [P] Configure CORS for production API if separate frontend domain
 - [ ] T218 Test production build with `npm run build` and `npm run start`
 - [ ] T219 Verify all environment variables are documented in .env.example
+
+**Note on E2E Testing**: End-to-end tests using Playwright (mentioned in plan.md) are deferred to Phase 11 (post-MVP). After MVP deployment, E2E tests will be added for critical user flows: login (US5), view roadmap (US1), drag-drop product (US2), and create product (US3).
 
 ---
 
