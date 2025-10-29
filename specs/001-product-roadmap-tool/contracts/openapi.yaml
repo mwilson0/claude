@@ -1,0 +1,1179 @@
+openapi: 3.0.3
+info:
+  title: Product Roadmap Creation Tool API
+  description: REST API for managing product roadmaps with multi-user collaboration, role-based access control, and write-locking
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@example.com
+
+servers:
+  - url: http://localhost:3000/api
+    description: Development server
+  - url: https://roadmap.example.com/api
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: User authentication and session management
+  - name: Roadmaps
+    description: Roadmap CRUD operations and configuration
+  - name: Products
+    description: Product management within roadmaps
+  - name: Write Locks
+    description: Collaborative editing write-lock management
+  - name: Permissions
+    description: User access control for roadmaps
+
+paths:
+  # Authentication Endpoints
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Authenticate user
+      description: |
+        Authenticate user with email and password. Returns user info and sets HTTP-only auth cookie.
+        **Development**: Uses mock user database
+        **Production**: Integrates with external auth system
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "editor@example.com"
+                password:
+                  type: string
+                  format: password
+                  example: "editor123"
+      responses:
+        '200':
+          description: Successfully authenticated
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: "auth-token=eyJhbGc...; HttpOnly; Secure; SameSite=Strict"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Logout user
+      description: Invalidate auth token and clear cookie
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Successfully logged out
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Logged out successfully"
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /auth/me:
+    get:
+      tags: [Authentication]
+      summary: Get current user
+      description: Retrieve authenticated user's profile
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Current user info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  # Roadmap Endpoints
+  /roadmaps:
+    get:
+      tags: [Roadmaps]
+      summary: List all accessible roadmaps
+      description: Returns roadmaps user owns or has permission to access
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: List of roadmaps
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Roadmap'
+                  metadata:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+    post:
+      tags: [Roadmaps]
+      summary: Create new roadmap
+      description: Create a new roadmap (admin only)
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRoadmapRequest'
+      responses:
+        '201':
+          description: Roadmap created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Roadmap'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /roadmaps/{roadmapId}:
+    get:
+      tags: [Roadmaps]
+      summary: Get roadmap details
+      description: Retrieve roadmap configuration and metadata
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RoadmapId'
+      responses:
+        '200':
+          description: Roadmap details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/RoadmapWithDetails'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    put:
+      tags: [Roadmaps]
+      summary: Update roadmap configuration
+      description: Update roadmap settings (editor or admin required)
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RoadmapId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRoadmapRequest'
+      responses:
+        '200':
+          description: Roadmap updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Roadmap'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    delete:
+      tags: [Roadmaps]
+      summary: Delete roadmap
+      description: Delete roadmap and all associated data (admin only)
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RoadmapId'
+      responses:
+        '204':
+          description: Roadmap deleted successfully
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /roadmaps/{roadmapId}/products:
+    get:
+      tags: [Products]
+      summary: Get all products for roadmap
+      description: Retrieve all products associated with a roadmap
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RoadmapId'
+      responses:
+        '200':
+          description: List of products
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Product'
+                  metadata:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  # Write Lock Endpoints
+  /roadmaps/{roadmapId}/lock:
+    post:
+      tags: [Write Locks]
+      summary: Acquire write lock
+      description: |
+        Request exclusive write access to roadmap. Uses first-wins strategy for simultaneous requests.
+        Requires editor or admin permission.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RoadmapId'
+      responses:
+        '200':
+          description: Lock acquired successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/WriteLock'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          description: Lock already held by another user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: "LOCK_HELD"
+                      message:
+                        type: string
+                        example: "Write lock currently held by another user"
+                      statusCode:
+                        type: integer
+                        example: 409
+                      details:
+                        type: object
+                        properties:
+                          lockHolder:
+                            type: object
+                            properties:
+                              userId:
+                                type: string
+                              name:
+                                type: string
+                          acquiredAt:
+                            type: string
+                            format: date-time
+
+    delete:
+      tags: [Write Locks]
+      summary: Release write lock
+      description: Release exclusive write access (must be lock holder)
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RoadmapId'
+      responses:
+        '204':
+          description: Lock released successfully
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Not the lock holder
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No active lock found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    get:
+      tags: [Write Locks]
+      summary: Get write lock status
+      description: Check current write lock status for roadmap
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RoadmapId'
+      responses:
+        '200':
+          description: Lock status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    oneOf:
+                      - $ref: '#/components/schemas/WriteLock'
+                      - type: null
+                    description: Lock details if active, null if no lock
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /roadmaps/{roadmapId}/lock/heartbeat:
+    put:
+      tags: [Write Locks]
+      summary: Send lock heartbeat
+      description: Update heartbeat timestamp and extend lock expiry (lock holder only)
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RoadmapId'
+      responses:
+        '200':
+          description: Heartbeat updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      expiresAt:
+                        type: string
+                        format: date-time
+                      expiresIn:
+                        type: integer
+                        description: Milliseconds until expiry
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Not the lock holder
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No active lock found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # Product Endpoints
+  /products:
+    post:
+      tags: [Products]
+      summary: Create new product
+      description: Add a new product to a roadmap (requires write lock)
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProductRequest'
+      responses:
+        '201':
+          description: Product created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Product'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          description: Write lock not held or part number already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /products/{productId}:
+    get:
+      tags: [Products]
+      summary: Get product details
+      description: Retrieve detailed information for a specific product
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '200':
+          description: Product details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProductWithLinks'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    put:
+      tags: [Products]
+      summary: Update product
+      description: Update product information (requires write lock on parent roadmap)
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProductRequest'
+      responses:
+        '200':
+          description: Product updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Product'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          description: Write lock not held
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags: [Products]
+      summary: Delete product
+      description: Remove product from roadmap (requires write lock)
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '204':
+          description: Product deleted successfully
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          description: Write lock not held
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /products/{productId}/position:
+    patch:
+      tags: [Products]
+      summary: Update product position
+      description: |
+        Update product position on roadmap (drag-drop operation).
+        Requires write lock on parent roadmap.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [xPosition, yPosition]
+              properties:
+                xPosition:
+                  type: string
+                  description: Time value or phase name
+                  example: "2025-Q1"
+                yPosition:
+                  type: string
+                  description: Category/investment/type value
+                  example: "Hardware"
+      responses:
+        '200':
+          description: Position updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Product'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          description: Write lock not held
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # Permission Endpoints
+  /roadmaps/{roadmapId}/permissions:
+    get:
+      tags: [Permissions]
+      summary: List roadmap permissions
+      description: Get all user permissions for a roadmap (admin only)
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RoadmapId'
+      responses:
+        '200':
+          description: List of permissions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Permission'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+    post:
+      tags: [Permissions]
+      summary: Grant roadmap permission
+      description: Grant user access to roadmap (admin only)
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RoadmapId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GrantPermissionRequest'
+      responses:
+        '201':
+          description: Permission granted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Permission'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          description: Permission already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /permissions/{permissionId}:
+    delete:
+      tags: [Permissions]
+      summary: Revoke permission
+      description: Remove user access to roadmap (admin only)
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: permissionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Permission revoked successfully
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: auth-token
+
+  parameters:
+    RoadmapId:
+      name: roadmapId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Unique roadmap identifier
+
+    ProductId:
+      name: productId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Unique product identifier
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        role:
+          type: string
+          enum: [viewer, editor, admin]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    LoginResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+
+    Roadmap:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        xAxisMode:
+          type: string
+          enum: [time, phase]
+        yAxisType:
+          type: string
+          enum: [category, investment, productType]
+        yAxisValues:
+          type: array
+          items:
+            type: string
+        ownerId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    RoadmapWithDetails:
+      allOf:
+        - $ref: '#/components/schemas/Roadmap'
+        - type: object
+          properties:
+            products:
+              type: array
+              items:
+                $ref: '#/components/schemas/Product'
+            phases:
+              type: array
+              items:
+                $ref: '#/components/schemas/Phase'
+            writeLock:
+              oneOf:
+                - $ref: '#/components/schemas/WriteLock'
+                - type: null
+
+    CreateRoadmapRequest:
+      type: object
+      required: [name, yAxisValues]
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 255
+        description:
+          type: string
+          nullable: true
+        xAxisMode:
+          type: string
+          enum: [time, phase]
+          default: time
+        yAxisType:
+          type: string
+          enum: [category, investment, productType]
+          default: category
+        yAxisValues:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          maxItems: 15
+
+    UpdateRoadmapRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 255
+        description:
+          type: string
+          nullable: true
+        xAxisMode:
+          type: string
+          enum: [time, phase]
+        yAxisType:
+          type: string
+          enum: [category, investment, productType]
+        yAxisValues:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          maxItems: 15
+
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        codename:
+          type: string
+        partNumber:
+          type: string
+        description:
+          type: string
+        sampleDate:
+          type: string
+          format: date
+        releaseDate:
+          type: string
+          format: date
+        roadmapId:
+          type: string
+          format: uuid
+        xPosition:
+          type: string
+        yPosition:
+          type: string
+        metadataLinks:
+          type: array
+          items:
+            $ref: '#/components/schemas/MetadataLink'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ProductWithLinks:
+      allOf:
+        - $ref: '#/components/schemas/Product'
+        - type: object
+          properties:
+            dashboardLinks:
+              type: array
+              items:
+                $ref: '#/components/schemas/DashboardLink'
+
+    CreateProductRequest:
+      type: object
+      required: [codename, partNumber, description, sampleDate, releaseDate, roadmapId, xPosition, yPosition]
+      properties:
+        codename:
+          type: string
+          minLength: 2
+          maxLength: 100
+        partNumber:
+          type: string
+          minLength: 3
+          maxLength: 100
+        description:
+          type: string
+          minLength: 10
+        sampleDate:
+          type: string
+          format: date
+        releaseDate:
+          type: string
+          format: date
+        roadmapId:
+          type: string
+          format: uuid
+        xPosition:
+          type: string
+        yPosition:
+          type: string
+        metadataLinks:
+          type: array
+          items:
+            $ref: '#/components/schemas/MetadataLink'
+          default: []
+
+    UpdateProductRequest:
+      type: object
+      properties:
+        codename:
+          type: string
+          minLength: 2
+          maxLength: 100
+        partNumber:
+          type: string
+          minLength: 3
+          maxLength: 100
+        description:
+          type: string
+          minLength: 10
+        sampleDate:
+          type: string
+          format: date
+        releaseDate:
+          type: string
+          format: date
+        xPosition:
+          type: string
+        yPosition:
+          type: string
+        metadataLinks:
+          type: array
+          items:
+            $ref: '#/components/schemas/MetadataLink'
+
+    MetadataLink:
+      type: object
+      properties:
+        dashboardId:
+          type: string
+        dashboardType:
+          type: string
+        label:
+          type: string
+        contextParams:
+          type: object
+          additionalProperties: true
+
+    DashboardLink:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        dashboardType:
+          type: string
+        dashboardId:
+          type: string
+        label:
+          type: string
+        contextParams:
+          type: object
+          additionalProperties: true
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    WriteLock:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        roadmapId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        userName:
+          type: string
+        acquiredAt:
+          type: string
+          format: date-time
+        lastHeartbeat:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        expiresIn:
+          type: integer
+          description: Milliseconds until expiry
+
+    Permission:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        userName:
+          type: string
+        userEmail:
+          type: string
+          format: email
+        roadmapId:
+          type: string
+          format: uuid
+        permissionLevel:
+          type: string
+          enum: [viewer, editor, admin]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    GrantPermissionRequest:
+      type: object
+      required: [userId, permissionLevel]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        permissionLevel:
+          type: string
+          enum: [viewer, editor, admin]
+
+    Phase:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        roadmapId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        order:
+          type: integer
+          minimum: 0
+        color:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            statusCode:
+              type: integer
+            details:
+              type: object
+              additionalProperties: true
+
+  responses:
+    UnauthorizedError:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: "UNAUTHORIZED"
+              message: "Authentication required"
+              statusCode: 401
+
+    ForbiddenError:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: "FORBIDDEN"
+              message: "Insufficient permissions to perform this action"
+              statusCode: 403
+
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: "NOT_FOUND"
+              message: "Resource not found"
+              statusCode: 404
+
+    ValidationError:
+      description: Invalid request data
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: "VALIDATION_ERROR"
+              message: "Invalid request data"
+              statusCode: 400
+              details:
+                fields:
+                  sampleDate: "Sample date must be before or equal to release date"
+
+    ServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: "INTERNAL_ERROR"
+              message: "An unexpected error occurred"
+              statusCode: 500
+
+security:
+  - cookieAuth: []
