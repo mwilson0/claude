@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -ExecutionPolicy Bypass -File .specify/scripts/powershell/setup-plan.ps1 -Json)",
+      "Read(//c/Users/mhw21/Documents/Claude/specs/001-product-roadmap-tool/**)",
+      "WebSearch",
+      "WebFetch(domain:compileandrun.com)",
+      "WebFetch(domain:medium.com)",
+      "WebFetch(domain:dev.to)",
+      "WebFetch(domain:marmelab.com)",
+      "Bash(powershell -ExecutionPolicy Bypass -File .specify/scripts/powershell/update-agent-context.ps1 -AgentType claude)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nAdd implementation plan and tasks for Product Roadmap Tool\n\nGenerated comprehensive design and implementation artifacts:\n- spec.md: Feature specification with 7 user stories (P1-P4 priorities)\n- plan.md: Implementation plan with tech stack and architecture\n- research.md: Technical research for 6 decision areas (drag-drop, visualization, auth, etc.)\n- data-model.md: Database schema with 7 entities and Prisma schema\n- contracts/openapi.yaml: REST API specification with 20+ endpoints\n- contracts/types.ts: Shared TypeScript types and utilities\n- quickstart.md: Developer onboarding guide\n- checklists/: Requirements quality validation checklists\n- tasks.md: 219 implementation tasks organized by user story\n\nTech Stack: React 18+, Next.js 14+ App Router, TypeScript 5+, PostgreSQL 15+, Prisma ORM, React Query, Zustand, dnd-kit, Tailwind CSS, shadcn/ui\n\nKey Decisions:\n- dnd-kit for drag-and-drop with grid snapping\n- Custom CSS Grid for 2D chart visualization\n- Polling-based write-lock with heartbeat mechanism\n- Next.js Middleware JWT for mock authentication\n- Prisma singleton with external connection pooler\n\nTask Organization:\n- Phase 1: Setup (11 tasks)\n- Phase 2: Foundational - CRITICAL PATH (24 tasks)\n- Phase 3-9: User Stories (149 tasks - independently testable)\n- Phase 10: Polish (35 tasks)\n\nMVP Strategy: US1 (View Roadmap) + US5 (Auth) = 83 tasks for working viewer\n\n🤖 Generated with Claude Code (https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(powershell -ExecutionPolicy Bypass -File .specify/scripts/powershell/check-prerequisites.ps1 -Json -RequireTasks -IncludeTasks)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
